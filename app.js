@@ -5,7 +5,8 @@ const mongoose = require('mongoose');
 const ejs = require("ejs");
 const port = 3000;
 const app = express();
-const md5 = require('md5');
+const bcrypt = require('bcrypt');
+const saltRounds = 10;
 
 app.set('view engine', 'ejs');
 
@@ -44,22 +45,24 @@ app.get("/register", (req, res) => {
 });
 
 app.post("/register", (req, res) => {
-  const newUser = new User({
-    email: req.body.username,
-    password: md5(req.body.password)
-  });
-  newUser.save((err) => {
-    if (!err) {
-      res.render("secrets");
-    } else {
-      res.send(err);
-    }
+  bcrypt.hash(req.body.password, saltRounds, (err, hash) => {
+    const newUser = new User({
+      email: req.body.username,
+      password: hash
+    });
+    newUser.save((err) => {
+      if (!err) {
+        res.render("secrets");
+      } else {
+        res.send(err);
+      }
+    });
   });
 });
 
 app.post("/login", (req, res) => {
   const username = req.body.username;
-  const password = md5(req.body.password);
+  const password = req.body.password;
   User.findOne({
     email: username
   }, (err, foundUser) => {
@@ -67,16 +70,18 @@ app.post("/login", (req, res) => {
       res.send(err);
     } else {
       if (foundUser) {
-        if (foundUser.password === password) {
-          res.render("secrets");
-          console.log("New login (" + username + ")");
-        } else {
-          res.render("login", {
-            errMsg: "Email or password incorrect",
-            username: username,
-            password: password
-          });
-        }
+        bcrypt.compare(password, foundUser.password, (err, result) => {
+          if (result === true) {
+            res.render("secrets");
+            console.log("New login (" + username + ")");
+          } else {
+            res.render("login", {
+              errMsg: "Email or password incorrect",
+              username: username,
+              password: password
+            });
+          }
+        })
       } else {
         res.render("login", {
           errMsg: "Email or password incorrect",
